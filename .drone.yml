@@ -1,16 +1,45 @@
-clone:
-  path: github.com/drone/drone
+workspace:
+  base: /go
+  path: src/github.com/drone/drone
 
-build:
-  image: drone/golang:1.5
-  environment:
-    - GO15VENDOREXPERIMENT=1
-  commands:
-    - make deps gen
-    - make test test_postgres test_mysql
-    - make build build_static deb docs
+pipeline:
+  backend:
+    image: golang:1.6
+    environment:
+      - GO15VENDOREXPERIMENT=1
+    commands:
+      - make deps gen
+      - make test test_postgres test_mysql
 
-compose:
+  compile:
+    image: golang:1.6
+    environment:
+      - GO15VENDOREXPERIMENT=1
+      - GOPATH=/go
+    commands:
+      - export PATH=$PATH:$GOPATH/bin
+      - make build
+    when:
+      event: push
+
+  publish:
+    image: s3
+    acl: public-read
+    bucket: downloads.drone.io
+    source: release/**/*.*
+    when:
+      event: push
+      branch: master
+
+  docker:
+    repo: drone/drone
+    tag: [ "0.5.0", "0.5" ]
+    storage_driver: overlay
+    when:
+      branch: master
+      event: push
+
+services:
   postgres:
     image: postgres:9.4.5
     environment:
@@ -20,16 +49,3 @@ compose:
     environment:
       - MYSQL_DATABASE=test
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
-
-publish:
-  docker:
-    username: drone
-    password: $$DOCKER_PASS
-    email: $$DOCKER_EMAIL
-    repo: drone/drone
-    tag:
-      - "latest" 
-      - "0.4"
-    when:
-      repo: drone/drone
-      branch: master

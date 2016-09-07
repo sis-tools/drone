@@ -10,10 +10,11 @@ import (
 type SecretFunc func(*Token) (string, error)
 
 const (
-	UserToken = "user"
-	SessToken = "sess"
-	HookToken = "hook"
-	CsrfToken = "csrf"
+	UserToken  = "user"
+	SessToken  = "sess"
+	HookToken  = "hook"
+	CsrfToken  = "csrf"
+	AgentToken = "agent"
 )
 
 // Default algorithm used to sign JWT tokens.
@@ -53,7 +54,7 @@ func ParseRequest(r *http.Request, fn SecretFunc) (*Token, error) {
 		return Parse(token, fn)
 	}
 
-	// and finally we attemt to get the token from
+	// and finally we attempt to get the token from
 	// the user session cookie
 	cookie, err := r.Cookie("user_sess")
 	if err != nil {

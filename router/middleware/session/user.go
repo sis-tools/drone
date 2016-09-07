@@ -44,6 +44,10 @@ func SetUser() gin.HandlerFunc {
 			return user.Hash, err
 		})
 		if err == nil {
+			confv := c.MustGet("config")
+			if conf, ok := confv.(*model.Config); ok {
+				user.Admin = conf.IsAdmin(user)
+			}
 			c.Set("user", user)
 
 			// if this is a session token (ie not the API token)
@@ -70,15 +74,31 @@ func MustAdmin() gin.HandlerFunc {
 		user := User(c)
 		switch {
 		case user == nil:
-			c.AbortWithStatus(http.StatusUnauthorized)
-			// c.HTML(http.StatusUnauthorized, "401.html", gin.H{})
+			c.String(401, "User not authorized")
+			c.Abort()
 		case user.Admin == false:
-			c.AbortWithStatus(http.StatusForbidden)
-			// c.HTML(http.StatusForbidden, "401.html", gin.H{})
+			c.String(413, "User not authorized")
+			c.Abort()
 		default:
 			c.Next()
 		}
+	}
+}
 
+func MustRepoAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := User(c)
+		perm := Perm(c)
+		switch {
+		case user == nil:
+			c.String(401, "User not authorized")
+			c.Abort()
+		case perm.Admin == false:
+			c.String(403, "User not authorized")
+			c.Abort()
+		default:
+			c.Next()
+		}
 	}
 }
 
@@ -87,11 +107,10 @@ func MustUser() gin.HandlerFunc {
 		user := User(c)
 		switch {
 		case user == nil:
-			c.AbortWithStatus(http.StatusUnauthorized)
-			// c.HTML(http.StatusUnauthorized, "401.html", gin.H{})
+			c.String(401, "User not authorized")
+			c.Abort()
 		default:
 			c.Next()
 		}
-
 	}
 }

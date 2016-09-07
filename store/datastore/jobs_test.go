@@ -7,7 +7,7 @@ import (
 	"github.com/franela/goblin"
 )
 
-func Test_jobstore(t *testing.T) {
+func TestJobs(t *testing.T) {
 	db := openTest()
 	defer db.Close()
 
@@ -28,15 +28,15 @@ func Test_jobstore(t *testing.T) {
 				ExitCode: 0,
 				Number:   1,
 			}
-			err1 := s.Jobs().Create(job)
+			err1 := s.CreateJob(job)
 			g.Assert(err1 == nil).IsTrue()
 			g.Assert(job.ID != 0).IsTrue()
 
 			job.Status = "started"
-			err2 := s.Jobs().Update(job)
+			err2 := s.UpdateJob(job)
 			g.Assert(err2 == nil).IsTrue()
 
-			getjob, err3 := s.Jobs().Get(job.ID)
+			getjob, err3 := s.GetJob(job.ID)
 			g.Assert(err3 == nil).IsTrue()
 			g.Assert(getjob.Status).Equal(job.Status)
 		})
@@ -49,11 +49,11 @@ func Test_jobstore(t *testing.T) {
 				Number:      1,
 				Environment: map[string]string{"foo": "bar"},
 			}
-			err1 := s.Jobs().Create(job)
+			err1 := s.CreateJob(job)
 			g.Assert(err1 == nil).IsTrue()
 			g.Assert(job.ID != 0).IsTrue()
 
-			getjob, err2 := s.Jobs().Get(job.ID)
+			getjob, err2 := s.GetJob(job.ID)
 			g.Assert(err2 == nil).IsTrue()
 			g.Assert(getjob.ID).Equal(job.ID)
 			g.Assert(getjob.Status).Equal(job.Status)
@@ -69,11 +69,11 @@ func Test_jobstore(t *testing.T) {
 				ExitCode: 1,
 				Number:   1,
 			}
-			err1 := s.Jobs().Create(job)
+			err1 := s.CreateJob(job)
 			g.Assert(err1 == nil).IsTrue()
 			g.Assert(job.ID != 0).IsTrue()
 
-			getjob, err2 := s.Jobs().GetNumber(&model.Build{ID: 1}, 1)
+			getjob, err2 := s.GetJobNumber(&model.Build{ID: 1}, 1)
 			g.Assert(err2 == nil).IsTrue()
 			g.Assert(getjob.ID).Equal(job.ID)
 			g.Assert(getjob.Status).Equal(job.Status)
@@ -86,19 +86,19 @@ func Test_jobstore(t *testing.T) {
 				Status: model.StatusSuccess,
 			}
 			jobs := []*model.Job{
-				&model.Job{
+				{
 					BuildID:  1,
 					Status:   "success",
 					ExitCode: 0,
 					Number:   1,
 				},
-				&model.Job{
+				{
 					BuildID:  3,
 					Status:   "error",
 					ExitCode: 1,
 					Number:   2,
 				},
-				&model.Job{
+				{
 					BuildID:  5,
 					Status:   "pending",
 					ExitCode: 0,
@@ -106,9 +106,9 @@ func Test_jobstore(t *testing.T) {
 				},
 			}
 
-			err1 := s.Builds().Create(&build, jobs...)
+			err1 := s.CreateBuild(&build, jobs...)
 			g.Assert(err1 == nil).IsTrue()
-			getjobs, err2 := s.Jobs().GetList(&build)
+			getjobs, err2 := s.GetJobList(&build)
 			g.Assert(err2 == nil).IsTrue()
 			g.Assert(len(getjobs)).Equal(3)
 			g.Assert(getjobs[0].Number).Equal(1)

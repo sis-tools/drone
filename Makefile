@@ -1,43 +1,32 @@
-.PHONY: vendor docs
+.PHONY: build
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
-all: gen build
+ifneq ($(shell uname), Darwin)
+	EXTLDFLAGS = -extldflags "-static" $(null)
+else
+	EXTLDFLAGS =
+endif
 
-deps:
+all: gen build_static
+
+deps: deps_backend deps_frontend
+
+deps_frontend:
+	go get -u github.com/drone/drone-ui/dist
+
+deps_backend:
 	go get -u golang.org/x/tools/cmd/cover
-	go get -u golang.org/x/tools/cmd/vet
-	go get -u github.com/kr/vexp
-	go get -u github.com/eknkc/amber/...
-	go get -u github.com/eknkc/amber
 	go get -u github.com/jteeuwen/go-bindata/...
 	go get -u github.com/elazarl/go-bindata-assetfs/...
-	go get -u github.com/dchest/jsmin
-	go get -u github.com/franela/goblin
-	go get -u github.com/PuerkitoBio/goquery
-	go get -u github.com/russross/blackfriday
-	GO15VENDOREXPERIMENT=1 go get -u github.com/go-swagger/go-swagger/...
 
-gen: gen_static gen_template gen_migrations
-
-gen_static:
-	mkdir -p static/docs_gen/api static/docs_gen/build
-	mkdir -p static/docs_gen/api static/docs_gen/plugin
-	mkdir -p static/docs_gen/api static/docs_gen/setup
-	mkdir -p static/docs_gen/api static/docs_gen/cli
-	go generate github.com/drone/drone/static
+gen: gen_template gen_migrations
 
 gen_template:
-	go generate github.com/drone/drone/template
+	go generate github.com/drone/drone/server/template
 
 gen_migrations:
-	go generate github.com/drone/drone/store/migration
-
-build:
-	go build
-
-build_static:
-	go build --ldflags '-extldflags "-static" -X main.build=$(CI_BUILD_NUMBER)' -o drone_static
+	go generate github.com/drone/drone/store/datastore/ddl
 
 test:
 	go test -cover $(PACKAGES)
@@ -50,19 +39,35 @@ test_mysql:
 test_postgres:
 	DATABASE_DRIVER="postgres" DATABASE_CONFIG="host=127.0.0.1 user=postgres dbname=postgres sslmode=disable" go test github.com/drone/drone/store/datastore
 
-deb:
-	mkdir -p contrib/debian/drone/usr/local/bin
-	mkdir -p contrib/debian/drone/var/lib/drone
-	mkdir -p contrib/debian/drone/var/cache/drone
-	cp drone contrib/debian/drone/usr/local/bin
-	-dpkg-deb --build contrib/debian/drone
 
-vendor:
-	vexp
+# build the release files
+build: build_static build_cross build_tar build_sha
 
-docs:
-	mkdir -p /drone/tmp/docs
-	mkdir -p /drone/tmp/static
-	cp -a static/docs_gen/*   /drone/tmp/
-	cp -a static/styles_gen   /drone/tmp/static/
-	cp -a static/images       /drone/tmp/static/
+build_static:
+	go install -ldflags '${EXTLDFLAGS}-X github.com/drone/drone/version.VersionDev=$(DRONE_BUILD_NUMBER)' github.com/drone/drone/drone
+	mkdir -p release
+	cp $(GOPATH)/bin/drone release/
+
+# TODO this is getting moved to a shell script, do not alter
+build_cross:
+	GOOS=linux   GOARCH=amd64 CGO_ENABLED=0 go build -o release/linux/amd64/drone   github.com/drone/drone/drone
+	GOOS=linux   GOARCH=arm64 CGO_ENABLED=0 go build -o release/linux/arm64/drone   github.com/drone/drone/drone
+	GOOS=linux   GOARCH=arm   CGO_ENABLED=0 go build -o release/linux/arm/drone     github.com/drone/drone/drone
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o release/windows/amd64/drone github.com/drone/drone/drone
+	GOOS=darwin  GOARCH=amd64 CGO_ENABLED=0 go build -o release/darwin/amd64/drone  github.com/drone/drone/drone
+
+# TODO this is getting moved to a shell script, do not alter
+build_tar:
+	tar -cvzf release/linux/amd64/drone.tar.gz   -C release/linux/amd64   drone
+	tar -cvzf release/linux/arm64/drone.tar.gz   -C release/linux/arm64   drone
+	tar -cvzf release/linux/arm/drone.tar.gz     -C release/linux/arm     drone
+	tar -cvzf release/windows/amd64/drone.tar.gz -C release/windows/amd64 drone
+	tar -cvzf release/darwin/amd64/drone.tar.gz  -C release/darwin/amd64  drone
+
+# TODO this is getting moved to a shell script, do not alter
+build_sha:
+	sha256sum release/linux/amd64/drone.tar.gz   > release/linux/amd64/drone.sha256
+	sha256sum release/linux/arm64/drone.tar.gz   > release/linux/arm64/drone.sha256
+	sha256sum release/linux/arm/drone.tar.gz     > release/linux/arm/drone.sha256
+	sha256sum release/windows/amd64/drone.tar.gz > release/windows/amd64/drone.sha256
+	sha256sum release/darwin/amd64/drone.tar.gz  > release/darwin/amd64/drone.sha256
